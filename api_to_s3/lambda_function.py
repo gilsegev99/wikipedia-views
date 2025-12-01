@@ -82,4 +82,7 @@ def lambda_handler(event, context):
                 logger.error(f"Failed to upload {article} categories data to S3: {str(e)}")
                 raise
 
-    return {"message": "Success", "s3_key": key}
+    return {
+            "statusCode": 200,
+            "message": f"{yesterday} data processed successfully"
+        }
