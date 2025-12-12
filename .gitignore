@@ -1,1 +1,5 @@
-api_to_s3/.env
+terraform/.terraform*
+terraform/terraform.tfstate*
+
+api_to_s3/lambda/python/*
+api_to_s3/lambda/*.zip
