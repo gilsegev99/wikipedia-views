@@ -9,7 +9,7 @@ from datetime import datetime, timedelta, timezone
 
 VIEWS_BASE_URL = "https://wikimedia.org/api/rest_v1/metrics/pageviews/top/en.wikipedia/all-access/"
 WIKIPEDIA_BASE_URL = "https://en.wikipedia.org/w/api.php"
-HEADERS = {"User-Agent": "Page views analysis (https://github.com/gilsegev99)"}
+HEADERS = {"User-Agent": os.environ["USER_AGENT_STRING"]}
 
 yesterday = (datetime.now(timezone.utc) - timedelta(days=1)).strftime('%Y/%m/%d')
 
@@ -54,7 +54,7 @@ def lambda_handler(event, context):
     if views_data is not None:
         try:
             s3_client.put_object(
-                Bucket=os.getenv("BUCKET"),
+                Bucket=os.environ["BUCKET"],
                 Key=views_key,
                 Body=json.dumps(views_data)
             )
@@ -73,7 +73,7 @@ def lambda_handler(event, context):
         if article_categories is not None:
             try:
                 s3_client.put_object(
-                    Bucket=os.getenv("BUCKET"),
+                    Bucket=os.environ["BUCKET"],
                     Key=cat_key,
                     Body=json.dumps(article_categories)
                 )
