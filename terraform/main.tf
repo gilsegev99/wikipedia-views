@@ -51,28 +51,22 @@ resource "aws_iam_role_policy_attachment" "lambda_basic_execution" {
 data "archive_file" "lambda_zip" {
   type = "zip"
   source_dir = "../api_to_s3/lambda"
-  output_path = "../api_to_s3/lambda/lambda_function.zip"
+  output_path = "../api_to_s3/lambda/lambda.zip"
 }
 
 resource "aws_lambda_function" "lambda_function" {
   function_name = var.lambda_function_name
-  filename = "../api_to_s3/lambda/lambda_function.zip"
+  filename = "../api_to_s3/lambda/lambda.zip"
   role = aws_iam_role.lambda_role.arn
   handler = "lambda_function.lambda_handler"
   runtime = "python3.14"
+  timeout = 420 
   depends_on = [ aws_iam_role_policy_attachment.lambda_policy_attach ]
+  source_code_hash = data.archive_file.lambda_zip.output_base64sha256
   environment {
     variables = {
       USER_AGENT_STRING = var.user_agent_string
       BUCKET_NAME = var.s3_bucket_name
     }
   }
-  layers = [ aws_lambda_layer_version.lambda_layer.arn ]
-}
-
-resource "aws_lambda_layer_version" "lambda_layer" {
-  filename   = "../api_to_s3/lambda/layer.zip"
-  layer_name = "lambda-wikimedia-data-extractor-layer"
-
-  compatible_runtimes = ["python3.14"]
 }
