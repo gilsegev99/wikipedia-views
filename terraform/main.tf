@@ -70,3 +70,24 @@ resource "aws_lambda_function" "lambda_function" {
     }
   }
 }
+
+## Lambda Function Trigger
+
+resource "aws_cloudwatch_event_rule" "daily_at_0700_utc" {
+  name = "daily-at-0700-utc"
+  schedule_expression = "cron(0 7 * * ? *)"  
+}
+
+resource "aws_cloudwatch_event_target" "daily_at_0700_utc" {
+    rule = aws_cloudwatch_event_rule.daily_at_0700_utc.name
+    target_id = "lambda_function"
+    arn = aws_lambda_function.lambda_function.arn
+}
+
+resource "aws_lambda_permission" "allow_eventbridge_to_call_lambda_function" {
+    statement_id = "AllowExecutionFromCloudWatch"
+    action = "lambda:InvokeFunction"
+    function_name = aws_lambda_function.lambda_function.function_name
+    principal = "events.amazonaws.com"
+    source_arn = aws_cloudwatch_event_rule.daily_at_0700_utc.arn
+}
