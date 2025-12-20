@@ -27,6 +27,7 @@ def get_pageviews(datestring):
         response_json = response.json()
     else:
         response_json = None
+        logger.info(f"Page views API call returned None for {yesterday_slash_fmt}.")
     return response_json
 
 def get_categories(article):
@@ -44,6 +45,7 @@ def get_categories(article):
         response_json = response.json()
     else:
         response_json = None
+        logger.info(f"Categories API call returned None for {article}.")
     return response_json
 
 
