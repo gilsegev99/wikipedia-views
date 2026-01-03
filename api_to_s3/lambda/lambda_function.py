@@ -12,9 +12,6 @@ VIEWS_BASE_URL = "https://wikimedia.org/api/rest_v1/metrics/pageviews/top/en.wik
 WIKIPEDIA_BASE_URL = "https://en.wikipedia.org/w/api.php"
 HEADERS = {"User-Agent": os.environ["USER_AGENT_STRING"]}
 
-yesterday_slash_fmt = (datetime.now(timezone.utc) - timedelta(days=1)).strftime('%Y/%m/%d')
-yesterday_dash_fmt = (datetime.now(timezone.utc) - timedelta(days=1)).strftime('%Y-%m-%d')
-
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
 
@@ -65,18 +62,33 @@ def check_key_exists_and_up_to_date(bucket, key):
             raise
     else:
         return True
-
+    
 def lambda_handler(event, context):
-    views_key = f"raw/views_data/{yesterday_dash_fmt}.json"
+    date_str = event.get("date")
 
+    if not date_str:
+        # Default to UTC "yesterday" if not provided
+        date = datetime.now(timezone.utc) - timedelta(days=1)
+    else:
+        try:
+            date = datetime.strptime(date_str, "%Y-%m-%d")
+        except ValueError:
+            raise ValueError(
+                f"Invalid date format: '{date_str}'. Expected YYYY-MM-DD."
+            )
+    
+    date_dash_fmt = date.strftime('%Y-%m-%d')
+    date_slash_fmt = date.strftime('%Y/%m/%d')
+
+    views_key = f"raw/views_data/{date_dash_fmt}.json"
 
     if check_key_exists_and_up_to_date(S3_BUCKET, views_key):
         return {
             "statusCode": 200,
-            "message": f"{yesterday_slash_fmt} data already exists"
+            "message": f"{date_slash_fmt} data already exists"
         }
     else:
-        views_data = get_pageviews(yesterday_slash_fmt)
+        views_data = get_pageviews(date_slash_fmt)
 
         if views_data is not None:
             try:
@@ -86,9 +98,9 @@ def lambda_handler(event, context):
                     Body=json.dumps(views_data)
                 )
 
-                logger.info(f"Successfully uploaded {yesterday_slash_fmt} views data to S3.")
+                logger.info(f"Successfully uploaded {date_slash_fmt} views data to S3.")
             except Exception as e:
-                logger.error(f"Failed to upload {yesterday_slash_fmt} views data to S3: {str(e)}")
+                logger.error(f"Failed to upload {date_slash_fmt} views data to S3: {str(e)}")
                 raise
         
         article_titles = [article['article'] for article in views_data['items'][0]['articles']]
@@ -114,5 +126,5 @@ def lambda_handler(event, context):
 
         return {
                 "statusCode": 200,
-                "message": f"{yesterday_slash_fmt} data processed successfully"
+                "message": f"{date_slash_fmt} data processed successfully"
             }
