@@ -63,6 +63,19 @@ def check_key_exists_and_up_to_date(bucket, key):
     else:
         return True
     
+def put_data_in_s3(data, key:str, object:str):
+    if data is not None:
+        try:
+            s3_client.put_object(
+                Bucket=S3_BUCKET,
+                Key=key,
+                Body=json.dumps(data)
+            )
+            logger.info(f"Successfully uploaded {object} views data to S3.")
+        except Exception as e:
+            logger.error(f"Failed to upload {object} views data to S3: {str(e)}")
+            raise
+    
 def lambda_handler(event, context):
     date_str = event.get("date")
 
@@ -90,18 +103,7 @@ def lambda_handler(event, context):
     else:
         views_data = get_pageviews(date_slash_fmt)
 
-        if views_data is not None:
-            try:
-                s3_client.put_object(
-                    Bucket=S3_BUCKET,
-                    Key=views_key,
-                    Body=json.dumps(views_data)
-                )
-
-                logger.info(f"Successfully uploaded {date_slash_fmt} views data to S3.")
-            except Exception as e:
-                logger.error(f"Failed to upload {date_slash_fmt} views data to S3: {str(e)}")
-                raise
+        put_data_in_s3(views_data, views_key, date_slash_fmt)
         
         article_titles = [article['article'] for article in views_data['items'][0]['articles']]
 
@@ -112,17 +114,7 @@ def lambda_handler(event, context):
             if not key_exists:
                 article_categories = get_categories(article)
 
-                if article_categories is not None:
-                    try:
-                        s3_client.put_object(
-                            Bucket=S3_BUCKET,
-                            Key=cat_key,
-                            Body=json.dumps(article_categories)
-                        )
-                        logger.info(f"Successfully uploaded {article} categories data to S3.")
-                    except Exception as e:
-                        logger.error(f"Failed to upload {article} categories data to S3: {str(e)}")
-                        raise
+                put_data_in_s3(article_categories, cat_key, article)
 
         return {
                 "statusCode": 200,
