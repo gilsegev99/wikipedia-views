@@ -1,5 +1,6 @@
 
 import boto3
+import botocore
 import requests
 import os
 import logging
@@ -18,9 +19,9 @@ logger = logging.getLogger()
 logger.setLevel(logging.INFO)
 
 s3_client = boto3.client("s3")
+S3_BUCKET = os.environ["BUCKET_NAME"]
 
 def get_pageviews(datestring):
-
     response = requests.get(url=f"{VIEWS_BASE_URL}{datestring}", headers=HEADERS)
 
     if response.ok:
@@ -48,44 +49,70 @@ def get_categories(article):
         logger.info(f"Categories API call returned None for {article}.")
     return response_json
 
+def check_key_exists_and_up_to_date(bucket, key):
+    try:
+        one_year_ago = datetime.now(timezone.utc) - timedelta(days=365)
+        s3_client.head_object(Bucket=bucket, Key=key, IfModifiedSince=one_year_ago)
+    except botocore.exceptions.ClientError as e:
+        if e.response["Error"]["Code"] == "404":
+            logger.info(f"Object '{key}' not found in {bucket}")
+            return False
+        elif e.response["Error"]["Code"] == "304":
+            logger.info(f"Object '{key}' contains old data")
+            return False
+        else:
+            logger.error(f"Error checking for key: {e.response["Error"]["Code"]} {e.response["Error"]["Message"]}")
+            raise
+    else:
+        return True
 
 def lambda_handler(event, context):
-
-    views_data = get_pageviews(yesterday_slash_fmt)
     views_key = f"raw/views_data/{yesterday_dash_fmt}.json"
 
-    if views_data is not None:
-        try:
-            s3_client.put_object(
-                Bucket=os.environ["BUCKET_NAME"],
-                Key=views_key,
-                Body=json.dumps(views_data)
-            )
 
-            logger.info(f"Successfully uploaded {yesterday_slash_fmt} views data to S3.")
-        except Exception as e:
-            logger.error(f"Failed to upload {yesterday_slash_fmt} views data to S3: {str(e)}")
-            raise
-    
-    article_titles = [article['article'] for article in views_data['items'][0]['articles']]
+    if check_key_exists_and_up_to_date(S3_BUCKET, views_key):
+        return {
+            "statusCode": 200,
+            "message": f"{yesterday_slash_fmt} data already exists"
+        }
+    else:
+        views_data = get_pageviews(yesterday_slash_fmt)
 
-    for article in article_titles:
-        article_categories = get_categories(article)
-        cat_key = f"raw/category_data/{article}.json"
-
-        if article_categories is not None:
+        if views_data is not None:
             try:
                 s3_client.put_object(
-                    Bucket=os.environ["BUCKET_NAME"],
-                    Key=cat_key,
-                    Body=json.dumps(article_categories)
+                    Bucket=S3_BUCKET,
+                    Key=views_key,
+                    Body=json.dumps(views_data)
                 )
-                logger.info(f"Successfully uploaded {article} categories data to S3.")
-            except Exception as e:
-                logger.error(f"Failed to upload {article} categories data to S3: {str(e)}")
-                raise
 
-    return {
-            "statusCode": 200,
-            "message": f"{yesterday_slash_fmt} data processed successfully"
-        }
+                logger.info(f"Successfully uploaded {yesterday_slash_fmt} views data to S3.")
+            except Exception as e:
+                logger.error(f"Failed to upload {yesterday_slash_fmt} views data to S3: {str(e)}")
+                raise
+        
+        article_titles = [article['article'] for article in views_data['items'][0]['articles']]
+
+        for article in article_titles:        
+            cat_key = f"raw/category_data/{article}.json"
+            key_exists = check_key_exists_and_up_to_date(S3_BUCKET, cat_key)
+
+            if not key_exists:
+                article_categories = get_categories(article)
+
+                if article_categories is not None:
+                    try:
+                        s3_client.put_object(
+                            Bucket=S3_BUCKET,
+                            Key=cat_key,
+                            Body=json.dumps(article_categories)
+                        )
+                        logger.info(f"Successfully uploaded {article} categories data to S3.")
+                    except Exception as e:
+                        logger.error(f"Failed to upload {article} categories data to S3: {str(e)}")
+                        raise
+
+        return {
+                "statusCode": 200,
+                "message": f"{yesterday_slash_fmt} data processed successfully"
+            }
