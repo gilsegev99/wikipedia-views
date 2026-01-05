@@ -24,16 +24,21 @@ resource "aws_iam_role" "lambda_role" {
 
 resource "aws_iam_policy" "lambda_s3_policy" {
   name        = "lambda_s3_put_policy"
-  description = "Allow lambda to put objects into S3"
+  description = "Allow lambda to put and get objects in S3"
 
   policy = jsonencode({
     Version = "2012-10-17",
     Statement = [
       {
         Effect = "Allow",
-        Action = ["s3:PutObject", "s3:GetObject"],
+        Action = ["s3:PutObject", "s3:HeadObject", "s3:GetObject"],
         Resource = "${aws_s3_bucket.s3_bucket.arn}/*"
-      }
+      },
+      {      
+        Effect = "Allow",
+        Action = "s3:ListBucket",
+        Resource = "${aws_s3_bucket.s3_bucket.arn}"
+        },
     ]
   })
 }
