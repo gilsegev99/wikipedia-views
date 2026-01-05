@@ -25,7 +25,7 @@ def get_pageviews(datestring):
         response_json = response.json()
     else:
         response_json = None
-        logger.info(f"Page views API call returned None for {yesterday_slash_fmt}.")
+        logger.info(f"Page views API call returned None for {datestring}.")
     return response_json
 
 def get_categories(article):
@@ -58,7 +58,7 @@ def check_key_exists_and_up_to_date(bucket, key):
             logger.info(f"Object '{key}' contains old data")
             return False
         else:
-            logger.error(f"Error checking for key: {e.response["Error"]["Code"]} {e.response["Error"]["Message"]}")
+            logger.error(f"Error {e.response["Error"]["Code"]} checking for {key}: {e.response["Error"]["Message"]}")
             raise
     else:
         return True
