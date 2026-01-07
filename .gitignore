@@ -1,5 +1,5 @@
 terraform/.terraform*
 terraform/terraform.tfstate*
 
-api_to_s3/lambda/
-!api_to_s3/lambda/lambda_function.py
+api_to_s3/lambda_main/
+!api_to_s3/lambda_main/lambda_function.py

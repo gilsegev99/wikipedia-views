@@ -8,7 +8,7 @@ variable "s3_bucket_name" {
   default     = "wikimedia-data-bucket"
 }
 
-variable "lambda_function_name" {
+variable "lambda_function_main_name" {
   description = "The lambda function to extract Wikimedia data"
   default     = "lambda-wikimedia-data-extractor"
 }
