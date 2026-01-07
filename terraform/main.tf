@@ -55,13 +55,13 @@ resource "aws_iam_role_policy_attachment" "lambda_basic_execution" {
 
 data "archive_file" "lambda_zip" {
   type = "zip"
-  source_dir = "../api_to_s3/lambda"
-  output_path = "../api_to_s3/lambda/lambda.zip"
+  source_dir = "../api_to_s3/lambda_main"
+  output_path = "../api_to_s3/lambda_main/lambda.zip"
 }
 
-resource "aws_lambda_function" "lambda_function" {
-  function_name = var.lambda_function_name
-  filename = "../api_to_s3/lambda/lambda.zip"
+resource "aws_lambda_function" "lambda_function_main" {
+  function_name = var.lambda_function_main_name
+  filename = "../api_to_s3/lambda_main/lambda.zip"
   role = aws_iam_role.lambda_role.arn
   handler = "lambda_function.lambda_handler"
   runtime = "python3.14"
@@ -85,14 +85,14 @@ resource "aws_cloudwatch_event_rule" "daily_at_0700_utc" {
 
 resource "aws_cloudwatch_event_target" "daily_at_0700_utc" {
     rule = aws_cloudwatch_event_rule.daily_at_0700_utc.name
-    target_id = "lambda_function"
-    arn = aws_lambda_function.lambda_function.arn
+    target_id = "lambda_function_main"
+    arn = aws_lambda_function.lambda_function_main.arn
 }
 
 resource "aws_lambda_permission" "allow_eventbridge_to_call_lambda_function" {
     statement_id = "AllowExecutionFromCloudWatch"
     action = "lambda:InvokeFunction"
-    function_name = aws_lambda_function.lambda_function.function_name
+    function_name = aws_lambda_function.lambda_function_main.function_name
     principal = "events.amazonaws.com"
     source_arn = aws_cloudwatch_event_rule.daily_at_0700_utc.arn
 }
