@@ -13,6 +13,11 @@ variable "lambda_function_main_name" {
   default     = "lambda-wikimedia-data-extractor"
 }
 
+variable "lambda_function_date_generator_name" {
+  description = "The lambda function to generate a date range for backfill jobs"
+  default     = "lambda-date-range-generator"
+}
+
 variable "user_agent_string" {
   description = "The User-Agent header used in API requests"
   default = "Page views analysis (https://github.com/gilsegev99)"

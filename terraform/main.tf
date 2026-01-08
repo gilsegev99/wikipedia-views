@@ -4,10 +4,10 @@ resource "aws_s3_bucket" "s3_bucket" {
   bucket = var.s3_bucket_name
 }
 
-## Lambda Function
+## Lambda Function Main
 
-resource "aws_iam_role" "lambda_role" {
-  name = "aws_lambda_role"
+resource "aws_iam_role" "lambda_main_role" {
+  name = "aws_lambda_main_role"
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
     Statement = [{
@@ -43,17 +43,17 @@ resource "aws_iam_policy" "lambda_s3_policy" {
   })
 }
 
-resource "aws_iam_role_policy_attachment" "lambda_policy_attach" {
-  role       = aws_iam_role.lambda_role.name
+resource "aws_iam_role_policy_attachment" "lambda_main_policy_attach" {
+  role       = aws_iam_role.lambda_main_role.name
   policy_arn = aws_iam_policy.lambda_s3_policy.arn
 }
 
-resource "aws_iam_role_policy_attachment" "lambda_basic_execution" {
-  role       = aws_iam_role.lambda_role.name
+resource "aws_iam_role_policy_attachment" "lambda_main_basic_execution" {
+  role       = aws_iam_role.lambda_main_role.name
   policy_arn = "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
 }
 
-data "archive_file" "lambda_zip" {
+data "archive_file" "lambda_main_zip" {
   type = "zip"
   source_dir = "../api_to_s3/lambda_main"
   output_path = "../api_to_s3/lambda_main/lambda.zip"
@@ -62,12 +62,12 @@ data "archive_file" "lambda_zip" {
 resource "aws_lambda_function" "lambda_function_main" {
   function_name = var.lambda_function_main_name
   filename = "../api_to_s3/lambda_main/lambda.zip"
-  role = aws_iam_role.lambda_role.arn
+  role = aws_iam_role.lambda_main_role.arn
   handler = "lambda_function.lambda_handler"
   runtime = "python3.14"
   timeout = 420 
-  depends_on = [ aws_iam_role_policy_attachment.lambda_policy_attach ]
-  source_code_hash = data.archive_file.lambda_zip.output_base64sha256
+  depends_on = [ aws_iam_role_policy_attachment.lambda_main_policy_attach ]
+  source_code_hash = data.archive_file.lambda_main_zip.output_base64sha256
   environment {
     variables = {
       USER_AGENT_STRING = var.user_agent_string
@@ -76,7 +76,7 @@ resource "aws_lambda_function" "lambda_function_main" {
   }
 }
 
-## Lambda Function Trigger
+## Lambda Function Main Trigger
 
 resource "aws_cloudwatch_event_rule" "daily_at_0700_utc" {
   name = "daily-at-0700-utc"
@@ -85,7 +85,7 @@ resource "aws_cloudwatch_event_rule" "daily_at_0700_utc" {
 
 resource "aws_cloudwatch_event_target" "daily_at_0700_utc" {
     rule = aws_cloudwatch_event_rule.daily_at_0700_utc.name
-    target_id = "lambda_function_main"
+    target_id = "lambda_function"
     arn = aws_lambda_function.lambda_function_main.arn
 }
 
@@ -95,4 +95,44 @@ resource "aws_lambda_permission" "allow_eventbridge_to_call_lambda_function" {
     function_name = aws_lambda_function.lambda_function_main.function_name
     principal = "events.amazonaws.com"
     source_arn = aws_cloudwatch_event_rule.daily_at_0700_utc.arn
+}
+
+## Lambda Function Date Generator
+
+resource "aws_iam_role" "lambda_date_generator_role" {
+  name = "aws_lambda_date_generator_role"
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Action = "sts:AssumeRole"
+      Effect = "Allow"
+      Sid    = ""
+      Principal = {
+        Service = "lambda.amazonaws.com"
+      }
+      }
+    ]
+  })
+}
+
+resource "aws_iam_role_policy_attachment" "lambda_date_generator_basic_execution" {
+  role       = aws_iam_role.lambda_date_generator_role.name
+  policy_arn = "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+}
+
+data "archive_file" "lambda_date_generator_zip" {
+  type = "zip"
+  source_dir = "../api_to_s3/lambda_date_generator"
+  output_path = "../api_to_s3/lambda_date_generator/lambda.zip"
+}
+
+resource "aws_lambda_function" "lambda_function_date_generator" {
+  function_name = var.lambda_function_date_generator_name
+  filename = "../api_to_s3/lambda_date_generator/lambda.zip"
+  role = aws_iam_role.lambda_date_generator_role.arn
+  handler = "lambda_function.lambda_handler"
+  runtime = "python3.14"
+  timeout = 30
+  depends_on = [ ]
+  source_code_hash = data.archive_file.lambda_date_generator_zip.output_base64sha256
 }
