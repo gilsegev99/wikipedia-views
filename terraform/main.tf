@@ -23,7 +23,7 @@ resource "aws_iam_role" "lambda_main_role" {
 }
 
 resource "aws_iam_policy" "lambda_s3_policy" {
-  name        = "lambda_s3_put_policy"
+  name        = "lambda_s3_policy"
   description = "Allow lambda to put and get objects in S3"
 
   policy = jsonencode({
@@ -135,4 +135,52 @@ resource "aws_lambda_function" "lambda_function_date_generator" {
   timeout = 30
   depends_on = [ ]
   source_code_hash = data.archive_file.lambda_date_generator_zip.output_base64sha256
+}
+
+## Step Functions State Machines
+
+resource "aws_iam_role" "backfill_state_machine_role" {
+  name = "backfill_state_machine_role"
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Action = "sts:AssumeRole"
+      Effect = "Allow"
+      Sid    = ""
+      Principal = {
+        Service = "states.amazonaws.com"
+      }
+      }
+    ]
+  })
+}
+
+data "aws_iam_policy_document" "backfill_state_machine_role_policy" {
+  statement {
+    effect = "Allow"
+
+    actions = [
+      "lambda:InvokeFunction"
+    ]
+
+    resources = ["${aws_lambda_function.lambda_function_main.arn}",
+                "${aws_lambda_function.lambda_function_date_generator.arn}"]
+  }
+
+}
+
+# Create an IAM policy for the Step Functions state machine
+resource "aws_iam_role_policy" "StateMachinePolicy" {
+  role   = aws_iam_role.backfill_state_machine_role.id
+  policy = data.aws_iam_policy_document.backfill_state_machine_role_policy.json
+}
+
+resource "aws_sfn_state_machine" "backfill_sfn_state_machine" {
+  name     = var.backfill_state_machine_name
+  role_arn = aws_iam_role.backfill_state_machine_role.arn
+
+  definition = templatefile("${path.module}/statemachine/backfill_state_machine_asl.json",
+    { DateGeneratorLambda = aws_lambda_function.lambda_function_date_generator.arn,
+    DateProcessorLambda = aws_lambda_function.lambda_function_main.arn}
+  )
 }

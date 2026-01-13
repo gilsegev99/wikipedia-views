@@ -18,6 +18,10 @@ variable "lambda_function_date_generator_name" {
   default     = "lambda-date-range-generator"
 }
 
+variable "backfill_state_machine_name" {
+  default     = "backfill-state-machine"
+}
+
 variable "user_agent_string" {
   description = "The User-Agent header used in API requests"
   default = "Page views analysis (https://github.com/gilsegev99)"
