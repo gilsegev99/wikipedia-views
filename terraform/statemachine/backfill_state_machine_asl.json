@@ -28,6 +28,7 @@
     },
     "ProcessDates": {
       "Type": "Map",
+      "MaxConcurrency": 5,
       "ItemProcessor": {
         "ProcessorConfig": {
           "Mode": "INLINE"
