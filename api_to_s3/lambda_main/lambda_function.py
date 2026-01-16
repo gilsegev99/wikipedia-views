@@ -103,20 +103,27 @@ def lambda_handler(event, context):
     else:
         views_data = get_pageviews(date_slash_fmt)
 
-        put_data_in_s3(views_data, views_key, date_slash_fmt)
-        
-        article_titles = [article['article'] for article in views_data['items'][0]['articles']]
+        if views_data:
 
-        for article in article_titles:        
-            cat_key = f"raw/category_data/{article}.json"
-            key_exists = check_key_exists_and_up_to_date(S3_BUCKET, cat_key)
+            put_data_in_s3(views_data, views_key, date_slash_fmt)
+            
+            article_titles = [article['article'] for article in views_data['items'][0]['articles']]
 
-            if not key_exists:
-                article_categories = get_categories(article)
+            for article in article_titles:        
+                cat_key = f"raw/category_data/{article}.json"
+                key_exists = check_key_exists_and_up_to_date(S3_BUCKET, cat_key)
 
-                put_data_in_s3(article_categories, cat_key, article)
+                if not key_exists:
+                    article_categories = get_categories(article)
 
-        return {
-                "statusCode": 200,
-                "message": f"{date_slash_fmt} data processed successfully"
+                    put_data_in_s3(article_categories, cat_key, article)
+
+            return {
+                    "statusCode": 200,
+                    "message": f"{date_slash_fmt} data processed successfully"
+                }        
+        else:
+            return {
+                "statusCode": 204,
+                "message": f"Request for {date_slash_fmt} data returned None"
             }
