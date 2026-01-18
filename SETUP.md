@@ -157,7 +157,6 @@ You can check these in the AWS Console or using AWS CLI commands.
 ## Next Steps
 
 - Test the Lambda function manually through the AWS Console
-- Trigger a backfill using the Step Functions state machine
 - Monitor the daily scheduled runs
 - Check S3 for extracted data
 
@@ -172,3 +171,19 @@ If Terraform fails:
 - Check that your AWS credentials have sufficient permissions
 - Verify the region is valid and available for your account
 - Review the Terraform error messages for specific resource issues
+
+## Step 5: Backfill data
+
+### Execute Step Functions Backfill State Machine
+
+On top of the daily ingestion of new Wikipedia data, you may also want to backfill data for a given date range. This can be done with the Step Functions `backfill-state-machine` by running
+
+```bash
+aws stepfunctions start-execution \
+  --state-machine-arn YOUR_STATE_MACHINE_ARN \
+  --input '{
+    "start_date": "YYYY-MM-DD",
+    "end_date": "YYYY-MM-DD"
+  }'
+```
+The ARN of your state machine can be copied from the Step Functions console.
