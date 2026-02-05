@@ -166,7 +166,6 @@ data "aws_iam_policy_document" "backfill_state_machine_role_policy" {
     resources = ["${aws_lambda_function.lambda_function_main.arn}",
                 "${aws_lambda_function.lambda_function_date_generator.arn}"]
   }
-
 }
 
 # Create an IAM policy for the Step Functions state machine
@@ -183,4 +182,91 @@ resource "aws_sfn_state_machine" "backfill_sfn_state_machine" {
     { DateGeneratorLambda = aws_lambda_function.lambda_function_date_generator.arn,
     DateProcessorLambda = aws_lambda_function.lambda_function_main.arn}
   )
+}
+
+## Glue Transformation Job
+
+resource "aws_glue_job" "glue_bronze_to_silver_job" {
+  name              = "glue_bronze_to_silver_job"
+  description       = "A Glue job to convert json files to flattened Parquet files."
+  role_arn          = aws_iam_role.glue_bronze_to_silver_role.arn
+  glue_version      = "5.0"
+  max_retries       = 0
+  timeout           = 2880
+  number_of_workers = 2
+  worker_type       = "G.1X"
+  connections       = []
+  execution_class   = "STANDARD"
+
+  command {
+    script_location = "s3://${aws_s3_bucket.s3_bucket.bucket}/glue_scripts/process_raw_data.py"
+    name            = "process_raw_data"
+    python_version  = "3"
+  }
+
+  notification_property {
+    notify_delay_after = 3 # delay in minutes
+  }
+
+  default_arguments = {
+    "--job-language"                     = "python"
+    "--continuous-log-logGroup"          = "/aws-glue/jobs"
+    "--enable-continuous-cloudwatch-log" = "true"
+    "--enable-continuous-log-filter"     = "true"
+    "--enable-metrics"                   = ""
+    "--enable-auto-scaling"              = "true"
+  }
+
+  execution_property {
+    max_concurrent_runs = 1
+  }
+
+  tags = {
+    "ManagedBy" = "AWS"
+  }
+}
+
+# IAM role for Glue jobs
+resource "aws_iam_role" "glue_bronze_to_silver_role" {
+  name = "glue-job-role"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Action = "sts:AssumeRole"
+        Effect = "Allow"
+        Principal = {
+          Service = "glue.amazonaws.com"
+        }
+      }
+    ]
+  })
+}
+
+resource "aws_s3_object" "glue_bronze_to_silver_script" {
+  bucket = var.s3_bucket_name
+  key    = "glue_scripts/process_raw_data.py"
+  source = "../glue_scripts/process_raw_data.py" # Make sure this file exists locally
+}
+
+resource "aws_iam_policy" "glue_bronze_to_silver_policy" {
+  name        = "glue_bronze_to_silver_policy"
+  description = "Allow Glue to put and get objects in S3"
+
+  policy = jsonencode({
+    Version = "2012-10-17",
+    Statement = [
+      {
+        Effect = "Allow",
+        Action = ["s3:PutObject", "s3:GetObject"],
+        Resource = "${aws_s3_bucket.s3_bucket.arn}/*"
+      },
+    ]
+  })
+}
+
+resource "aws_iam_role_policy_attachment" "glue_policy_attach" {
+  role       = aws_iam_role.glue_bronze_to_silver_role.name
+  policy_arn = aws_iam_policy.glue_bronze_to_silver_policy.arn
 }
