@@ -192,7 +192,7 @@ resource "aws_glue_job" "glue_bronze_to_silver_job" {
   role_arn          = aws_iam_role.glue_bronze_to_silver_role.arn
   glue_version      = "5.0"
   max_retries       = 0
-  timeout           = 2880
+  timeout           = 30
   number_of_workers = 2
   worker_type       = "G.1X"
   connections       = []
@@ -200,7 +200,7 @@ resource "aws_glue_job" "glue_bronze_to_silver_job" {
 
   command {
     script_location = "s3://${aws_s3_bucket.s3_bucket.bucket}/glue_scripts/process_raw_data.py"
-    name            = "process_raw_data"
+    name            = "glueetl"
     python_version  = "3"
   }
 
@@ -209,12 +209,11 @@ resource "aws_glue_job" "glue_bronze_to_silver_job" {
   }
 
   default_arguments = {
-    "--job-language"                     = "python"
-    "--continuous-log-logGroup"          = "/aws-glue/jobs"
     "--enable-continuous-cloudwatch-log" = "true"
-    "--enable-continuous-log-filter"     = "true"
-    "--enable-metrics"                   = ""
+    "--enable-metrics"                   = "true"
     "--enable-auto-scaling"              = "true"
+    "--enable-job-insights"              = "true"
+    "--enable-glue-datacatalog"          = "true"
   }
 
   execution_property {
@@ -250,23 +249,33 @@ resource "aws_s3_object" "glue_bronze_to_silver_script" {
   source = "../glue_scripts/process_raw_data.py" # Make sure this file exists locally
 }
 
-resource "aws_iam_policy" "glue_bronze_to_silver_policy" {
-  name        = "glue_bronze_to_silver_policy"
-  description = "Allow Glue to put and get objects in S3"
+data "aws_iam_policy_document" "glue_bronze_to_silver_policy" {
+  statement {
+    effect = "Allow"
 
-  policy = jsonencode({
-    Version = "2012-10-17",
-    Statement = [
-      {
-        Effect = "Allow",
-        Action = ["s3:PutObject", "s3:GetObject"],
-        Resource = "${aws_s3_bucket.s3_bucket.arn}/*"
-      },
-    ]
-  })
+    actions = ["s3:GetObject"]
+
+    resources = ["${aws_s3_bucket.s3_bucket.arn}/*"]
+  }
+
+  statement {
+    effect = "Allow"
+
+    actions = ["s3:PutObject", "s3:DeleteObject"]
+
+    resources = ["${aws_s3_bucket.s3_bucket.arn}/processed/views_data/*"]
+  }
+
+   statement {
+    effect = "Allow"
+
+    actions = ["s3:ListBucket"]
+
+    resources = ["${aws_s3_bucket.s3_bucket.arn}"]
+  }
 }
 
-resource "aws_iam_role_policy_attachment" "glue_policy_attach" {
-  role       = aws_iam_role.glue_bronze_to_silver_role.name
-  policy_arn = aws_iam_policy.glue_bronze_to_silver_policy.arn
+resource "aws_iam_role_policy" "glue_bronze_to_silver_role_policy" {
+  role   = aws_iam_role.glue_bronze_to_silver_role.id
+  policy = data.aws_iam_policy_document.glue_bronze_to_silver_policy.json
 }
