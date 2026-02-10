@@ -247,6 +247,7 @@ resource "aws_s3_object" "glue_bronze_to_silver_script" {
   bucket = var.s3_bucket_name
   key    = "glue_scripts/process_raw_data.py"
   source = "../glue_scripts/process_raw_data.py" # Make sure this file exists locally
+  etag = filemd5("../glue_scripts/process_raw_data.py")
 }
 
 data "aws_iam_policy_document" "glue_bronze_to_silver_policy" {
@@ -266,16 +267,37 @@ data "aws_iam_policy_document" "glue_bronze_to_silver_policy" {
     resources = ["${aws_s3_bucket.s3_bucket.arn}/processed/views_data/*"]
   }
 
-   statement {
+  statement {
     effect = "Allow"
 
     actions = ["s3:ListBucket"]
 
     resources = ["${aws_s3_bucket.s3_bucket.arn}"]
   }
+
+  statement {
+    effect = "Allow"
+
+    actions = [
+      "glue:CreateTable",
+      "glue:UpdateTable",
+      "glue:GetTable",
+      "glue:GetDatabase",
+      "glue:GetPartitions",
+      "glue:CreatePartition"
+    ]
+
+    resources = ["*"]
+  }
 }
 
 resource "aws_iam_role_policy" "glue_bronze_to_silver_role_policy" {
   role   = aws_iam_role.glue_bronze_to_silver_role.id
   policy = data.aws_iam_policy_document.glue_bronze_to_silver_policy.json
+}
+
+# Glue Catalog Database
+
+resource "aws_glue_catalog_database" "glue_catalog_database" {
+  name = "wikimedia-data"
 }
