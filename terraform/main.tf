@@ -184,11 +184,11 @@ resource "aws_sfn_state_machine" "backfill_sfn_state_machine" {
   )
 }
 
-## Glue Transformation Job
+## Glue Transformation Jobs
 
-resource "aws_glue_job" "glue_bronze_to_silver_job" {
-  name              = "glue_bronze_to_silver_job"
-  description       = "A Glue job to convert json files to flattened Parquet files."
+resource "aws_glue_job" "glue_bronze_to_silver_views_job" {
+  name              = "glue_bronze_to_silver_views_job"
+  description       = "A Glue job to convert views json files to flattened Parquet files."
   role_arn          = aws_iam_role.glue_bronze_to_silver_role.arn
   glue_version      = "5.0"
   max_retries       = 0
@@ -199,7 +199,7 @@ resource "aws_glue_job" "glue_bronze_to_silver_job" {
   execution_class   = "STANDARD"
 
   command {
-    script_location = "s3://${aws_s3_bucket.s3_bucket.bucket}/glue_scripts/process_raw_data.py"
+    script_location = "s3://${aws_s3_bucket.s3_bucket.bucket}/${aws_s3_object.glue_bronze_to_silver_views_script.key}"
     name            = "glueetl"
     python_version  = "3"
   }
@@ -214,6 +214,42 @@ resource "aws_glue_job" "glue_bronze_to_silver_job" {
     "--enable-auto-scaling"              = "true"
     "--enable-job-insights"              = "true"
     "--enable-glue-datacatalog"          = "true"
+  }
+
+  execution_property {
+    max_concurrent_runs = 1
+  }
+
+  tags = {
+    "ManagedBy" = "AWS"
+  }
+}
+
+resource "aws_glue_job" "glue_bronze_to_silver_categories_job" {
+  name              = "glue_bronze_to_silver_categories_job"
+  description       = "A Glue Python Shell job to convert raw category data to parquet files"
+  role_arn          = aws_iam_role.glue_bronze_to_silver_role.arn
+  max_capacity      = "0.0625"
+  max_retries       = 0
+  timeout           = 300
+  connections       = []
+  execution_class   = "STANDARD"
+
+  command {
+    script_location = "s3://${aws_s3_bucket.s3_bucket.bucket}/${aws_s3_object.glue_bronze_to_silver_category_script.key}"
+    name            = "pythonshell"
+    python_version  = "3.9"
+  }
+
+  notification_property {
+    notify_delay_after = 3 # delay in minutes
+  }
+
+  default_arguments = {
+    "--job-language"                     = "python"
+    "--continuous-log-logGroup"          = "${aws_cloudwatch_log_group.glue_jobs_log_group.name}/python-jobs"
+    "--enable-continuous-cloudwatch-log" = "true"
+    "library-set"                        = "analytics" # loads common analytics libraries
   }
 
   execution_property {
@@ -243,11 +279,18 @@ resource "aws_iam_role" "glue_bronze_to_silver_role" {
   })
 }
 
-resource "aws_s3_object" "glue_bronze_to_silver_script" {
+resource "aws_s3_object" "glue_bronze_to_silver_views_script" {
   bucket = var.s3_bucket_name
-  key    = "glue_scripts/process_raw_data.py"
-  source = "../glue_scripts/process_raw_data.py" # Make sure this file exists locally
-  etag = filemd5("../glue_scripts/process_raw_data.py")
+  key    = "glue_scripts/process_raw_views_data.py"
+  source = "../glue_scripts/process_raw_views_data.py" # Make sure this file exists locally
+  etag = filemd5("../glue_scripts/process_raw_views_data.py")
+}
+
+resource "aws_s3_object" "glue_bronze_to_silver_category_script" {
+  bucket = var.s3_bucket_name
+  key    = "glue_scripts/process_raw_category_data.py"
+  source = "../glue_scripts/process_raw_category_data.py" # Make sure this file exists locally
+  etag = filemd5("../glue_scripts/process_raw_category_data.py")
 }
 
 data "aws_iam_policy_document" "glue_bronze_to_silver_policy" {
@@ -264,7 +307,8 @@ data "aws_iam_policy_document" "glue_bronze_to_silver_policy" {
 
     actions = ["s3:PutObject", "s3:DeleteObject"]
 
-    resources = ["${aws_s3_bucket.s3_bucket.arn}/processed/views_data/*"]
+    resources = ["${aws_s3_bucket.s3_bucket.arn}/processed/views_data/*",
+    "${aws_s3_bucket.s3_bucket.arn}/processed/category_data/*"]
   }
 
   statement {
@@ -289,11 +333,31 @@ data "aws_iam_policy_document" "glue_bronze_to_silver_policy" {
 
     resources = ["*"]
   }
+
+  statement {
+    effect = "Allow"
+
+    actions = [
+      "logs:CreateLogGroup",
+      "logs:CreateLogStream",
+      "logs:PutLogEvents"
+    ]
+    
+    resources = ["${aws_cloudwatch_log_group.glue_jobs_log_group.arn}"]
+  }
 }
 
 resource "aws_iam_role_policy" "glue_bronze_to_silver_role_policy" {
   role   = aws_iam_role.glue_bronze_to_silver_role.id
   policy = data.aws_iam_policy_document.glue_bronze_to_silver_policy.json
+}
+
+resource "aws_cloudwatch_log_group" "glue_jobs_log_group" {
+  name              = "/aws-glue"
+  retention_in_days = 7
+  lifecycle {
+    prevent_destroy = false
+  }
 }
 
 # Glue Catalog Database
